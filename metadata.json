@@ -1,0 +1,8 @@
+{
+  "name": "Tonewise",
+  "description": "Read the tone, not just the stars. Browser-native review sentiment analysis with dual VADER and RoBERTa models, OCR, and privacy-first local processing.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

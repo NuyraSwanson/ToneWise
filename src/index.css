@@ -1,0 +1,115 @@
+@import "tailwindcss";
+
+@layer base {
+  :root {
+    --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    --font-outfit: 'Outfit', 'Sora', sans-serif;
+    --font-mono: 'JetBrains Mono', monospace;
+  }
+
+  html.dark {
+    color-scheme: dark;
+  }
+
+  html.light {
+    color-scheme: light;
+  }
+
+  html.light body {
+    background-color: #F4F1FF;
+    color: #1E1B4B;
+  }
+
+  html.light header {
+    background-color: rgba(244, 241, 255, 0.92);
+    border-color: rgba(99, 102, 241, 0.15);
+  }
+
+  html.light .bg-white\/5 {
+    background-color: rgba(255, 255, 255, 0.85);
+    border-color: rgba(99, 102, 241, 0.12);
+  }
+
+  html.light .bg-black\/20,
+  html.light .bg-black\/30,
+  html.light .bg-black\/40 {
+    background-color: rgba(240, 237, 255, 0.9);
+    border-color: rgba(99, 102, 241, 0.15);
+  }
+
+  html.light .text-slate-100,
+  html.light .text-slate-200,
+  html.light .text-white {
+    color: #1E1B4B;
+  }
+
+  html.light .text-slate-300,
+  html.light .text-slate-400 {
+    color: #475569;
+  }
+
+  html.light .text-slate-500 {
+    color: #64748B;
+  }
+
+  html.light footer {
+    background-color: #ECE8FC;
+    border-color: rgba(99, 102, 241, 0.15);
+    color: #475569;
+  }
+}
+
+.font-outfit {
+  font-family: var(--font-outfit);
+}
+
+.font-sans {
+  font-family: var(--font-sans);
+}
+
+.font-mono {
+  font-family: var(--font-mono);
+}
+
+/* Custom Scrollbars */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(124, 92, 255, 0.3);
+  border-radius: 9999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(124, 92, 255, 0.6);
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-fade-in {
+  animation: fadeIn 0.2s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

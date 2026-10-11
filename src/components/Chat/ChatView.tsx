@@ -3,16 +3,18 @@ import { AnalysisItem, ChatMessage, PipelineStep } from '../../types';
 import { MessageCard } from './MessageCard';
 import { Composer } from './Composer';
 import { PipelineChips } from '../PipelineChips';
-import { Sparkles, MessageSquare, Terminal } from 'lucide-react';
+import { Terminal } from 'lucide-react';
 
 interface ChatViewProps {
   messages: ChatMessage[];
   currentStep: PipelineStep;
   isAnalyzing: boolean;
-  onSendMessage: (text: string) => void;
+  onSendMessage: (text: string, isSentence?: boolean) => void;
   onAttachImage: (file: File) => void;
   onAttachCsv: (file: File) => void;
   onAnalyzeMultipleLines: (lines: string[]) => void;
+  onSampleScreenshot?: () => void;
+  onSampleExpression?: (type: 'happy' | 'frustrated') => void;
   onExplainItem: (item: AnalysisItem) => void;
   onChipClick: (chip: string) => void;
   hasOcrStep?: boolean;
@@ -26,6 +28,8 @@ export const ChatView: React.FC<ChatViewProps> = ({
   onAttachImage,
   onAttachCsv,
   onAnalyzeMultipleLines,
+  onSampleScreenshot,
+  onSampleExpression,
   onExplainItem,
   onChipClick,
   hasOcrStep = false,
@@ -47,7 +51,7 @@ export const ChatView: React.FC<ChatViewProps> = ({
           <Terminal className="w-3.5 h-3.5 text-[#7C5CFF]" />
           <span className="font-semibold text-slate-300">Tone Assistant</span>
           <span>·</span>
-          <span className="text-[11px] text-slate-500">Deterministic rule-based intent engine</span>
+          <span className="text-[11px] text-slate-500">Reviews & Sentences Engine</span>
         </div>
         {/* Pipeline Chips */}
         <PipelineChips currentStep={currentStep} hasOcr={hasOcrStep} />
@@ -83,6 +87,8 @@ export const ChatView: React.FC<ChatViewProps> = ({
         onAttachImage={onAttachImage}
         onAttachCsv={onAttachCsv}
         onAnalyzeMultipleLines={onAnalyzeMultipleLines}
+        onSampleScreenshot={onSampleScreenshot}
+        onSampleExpression={onSampleExpression}
         isAnalyzing={isAnalyzing}
       />
     </div>

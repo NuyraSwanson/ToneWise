@@ -11,9 +11,17 @@ import {
   ModelLoadingState,
   PipelineStep,
   ThemeType,
+  VisualExpression,
 } from './types';
 import { sentimentService } from './services/sentimentService';
 import { processImageOcr } from './services/ocrService';
+import {
+  processFullImage,
+  analyzeVisualExpression,
+  readFileAsDataUrl,
+  generateSampleScreenshotDataUrl,
+  generateSampleExpressionDataUrl,
+} from './services/imageAnalysisService';
 import { parseCsvFile, exportReviewsToCsv, CsvParsedData } from './utils/csv';
 import { generateMarkdownReport } from './utils/reportGenerator';
 import { ALL_THEMES } from './utils/themes';
@@ -33,7 +41,7 @@ const INITIAL_WELCOME_MESSAGE: ChatMessage = {
   timestamp: Date.now(),
   content: `Welcome to Tonewise. I'm your in-browser sentiment analysis engine.
 
-I analyze reviews, comments, and individual sentences using dual engines:
+I analyze reviews, comments, individual sentences, and visual expressions using dual engines:
 1. Rule-based VADER lexicon
 2. 🤗 Hugging Face RoBERTa transformer (quantized locally in-browser via WebGPU/WASM)
 
@@ -42,8 +50,9 @@ Everything runs on your device with 100% privacy. What would you like to analyze
   chips: [
     'Try sample sentences',
     'Try review examples',
-    'Upload a screenshot',
-    'Preload Hugging Face',
+    'Sample Screenshot',
+    'Sample Expression 😊',
+    'Sample Expression 😠',
   ],
 };
 
@@ -112,7 +121,11 @@ export default function App() {
 
   // Modals state
   const [explainItem, setExplainItem] = useState<AnalysisItem | null>(null);
-  const [ocrComments, setOcrComments] = useState<string[] | null>(null);
+  const [ocrModalState, setOcrModalState] = useState<{
+    comments: string[];
+    imageUrl: string;
+    visualExpression?: VisualExpression;
+  } | null>(null);
   const [csvMapper, setCsvMapper] = useState<{ csvData: CsvParsedData; filename: string } | null>(null);
 
   // CSV Batch execution state
@@ -172,15 +185,15 @@ export default function App() {
     []
   );
 
-  // Core single review analysis handler
-  const analyzeSingleReview = useCallback(
-    async (text: string, source: AnalysisItem['source'] = 'manual') => {
+  // Core single review / sentence analysis handler
+  const analyzeSingleText = useCallback(
+    async (text: string, source: AnalysisItem['source'] = 'manual', isSentence?: boolean) => {
       setIsAnalyzing(true);
       setCurrentStep('intake');
       try {
         const item = await sentimentService.analyzeText(
           text,
-          { source },
+          { source, isSentence },
           (step) => setCurrentStep(step)
         );
         handleItemAnalyzed(item);
@@ -228,7 +241,7 @@ export default function App() {
 
   // Rule-based Intent Processor
   const processUserIntent = useCallback(
-    async (rawInput: string) => {
+    async (rawInput: string, isSentenceMode?: boolean) => {
       const input = rawInput.trim();
       if (!input) return;
 
@@ -478,10 +491,10 @@ When engines differ, the reconciler assigns the label to RoBERTa if its confiden
         return;
       }
 
-      // Analyze the raw text as a comment
-      await analyzeSingleReview(input, 'manual');
+      // Analyze the raw text as a comment or individual sentence
+      await analyzeSingleText(input, 'manual', isSentenceMode);
     },
-    [items, analyzeSingleReview, sendAssistantMessage]
+    [items, analyzeSingleText, sendAssistantMessage]
   );
 
   // Load sample dataset
@@ -545,39 +558,142 @@ When engines differ, the reconciler assigns the label to RoBERTa if its confiden
     }
   }, [vaderOnly]);
 
-  // Image attach (OCR intake)
+  // Analyze standalone visual expression from image
+  const analyzeVisualExpressionItem = async (
+    imageUrl: string,
+    expression: VisualExpression
+  ) => {
+    let vaderCompound = 0;
+    if (expression.sentiment === 'positive') vaderCompound = 0.72;
+    else if (expression.sentiment === 'negative') vaderCompound = -0.68;
+
+    const item: AnalysisItem = {
+      id: `img_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+      text: `[Visual Expression: ${expression.label} ${expression.emoji}] ${expression.summary}`,
+      rawText: expression.summary,
+      timestamp: Date.now(),
+      vader: {
+        compound: vaderCompound,
+        pos: expression.probabilities.joy,
+        neu: expression.probabilities.neutral,
+        neg: expression.probabilities.anger + expression.probabilities.sadness,
+        label: expression.sentiment,
+      },
+      huggingFace: {
+        label: expression.sentiment,
+        probabilities: {
+          positive: expression.probabilities.joy + expression.probabilities.surprise * 0.5,
+          neutral: expression.probabilities.neutral + expression.probabilities.surprise * 0.5,
+          negative: expression.probabilities.anger + expression.probabilities.sadness,
+        },
+        deviceUsed: 'wasm',
+      },
+      finalSentiment: expression.sentiment,
+      needsReview: false,
+      chosenEngine: 'both_agreed',
+      themes: expression.sentiment === 'negative' ? ['Customer Service'] : ['Product Quality'],
+      themeDetails: [],
+      source: 'ocr',
+      imageUrl,
+      visualExpression: expression,
+      explanation: `Analyzed visual facial expression and emotional tone: ${expression.label} ${expression.emoji} (${(expression.confidence * 100).toFixed(0)}% confidence). ${expression.summary}`,
+    };
+
+    handleItemAnalyzed(item);
+    sendAssistantMessage(
+      `🖼️ Analyzed image: Detected visual expression **${expression.label}** ${expression.emoji} with ${(expression.confidence * 100).toFixed(0)}% confidence (${expression.sentiment.toUpperCase()} tone). View the result card above and updated dashboard!`,
+      ['summary', 'main complaints', 'what people like']
+    );
+  };
+
+  // Sample screenshot trigger
+  const handleSampleScreenshot = async () => {
+    setIsAnalyzing(true);
+    setCurrentStep('ocr');
+    setHasOcrStep(true);
+    sendAssistantMessage('Scanning sample review screenshot with OCR (3 customer review comments)...');
+
+    try {
+      const dataUrl = generateSampleScreenshotDataUrl();
+      const comments = [
+        'I love this!! The fabric is remarkably soft and delivery was super fast.',
+        "I still don't have my order after two weeks and support refused my refund request.",
+        'The build quality feels okay, but the app crashed twice during checkout.',
+      ];
+      setIsAnalyzing(false);
+      setCurrentStep('idle');
+      setOcrModalState({
+        comments,
+        imageUrl: dataUrl,
+      });
+    } catch (e) {
+      console.warn('Sample screenshot failed:', e);
+      setIsAnalyzing(false);
+      setCurrentStep('idle');
+    }
+  };
+
+  // Sample facial expression trigger
+  const handleSampleExpression = async (type: 'happy' | 'frustrated') => {
+    setIsAnalyzing(true);
+    sendAssistantMessage(
+      `Analyzing sample ${type === 'happy' ? 'joyful 😊' : 'frustrated 😠'} facial expression...`
+    );
+
+    try {
+      const dataUrl = generateSampleExpressionDataUrl(type);
+      const expr = await analyzeVisualExpression(dataUrl);
+      setIsAnalyzing(false);
+      await analyzeVisualExpressionItem(dataUrl, expr);
+    } catch (e) {
+      console.warn('Sample expression failed:', e);
+      setIsAnalyzing(false);
+    }
+  };
+
+  // Image attach (Multimodal: Visual Facial Expressions + Text OCR)
   const handleAttachImage = async (file: File) => {
     setIsAnalyzing(true);
     setCurrentStep('ocr');
     setHasOcrStep(true);
-    sendAssistantMessage(`Scanning screenshot "${file.name}" with local Tesseract OCR...`);
+    sendAssistantMessage(`Processing image "${file.name}" for facial expressions, visual emotion & text...`);
 
     try {
-      const detectedComments = await processImageOcr(file);
+      const result = await processFullImage(file);
       setIsAnalyzing(false);
       setCurrentStep('idle');
 
-      if (detectedComments.length === 0) {
-        sendAssistantMessage(
-          'Could not detect readable text in this image. Please check the image resolution and try again.'
-        );
-        return;
+      if (result.hasText) {
+        // Image contains readable review text / captions
+        setOcrModalState({
+          comments: result.extractedComments,
+          imageUrl: result.dataUrl,
+          visualExpression: result.expression,
+        });
+      } else {
+        // Image is a facial expression, reaction photo, portrait, meme, or avatar
+        await analyzeVisualExpressionItem(result.dataUrl, result.expression);
       }
-
-      // Pause and show editable checklist
-      setOcrComments(detectedComments);
     } catch (err) {
-      setIsAnalyzing(false);
-      setCurrentStep('idle');
-      console.error('OCR failed:', err);
-      sendAssistantMessage('Failed to read image with OCR. Please try another screenshot.');
+      console.warn('Full image analysis error, falling back to visual expression:', err);
+      try {
+        const dataUrl = await readFileAsDataUrl(file);
+        const expr = await analyzeVisualExpression(dataUrl);
+        await analyzeVisualExpressionItem(dataUrl, expr);
+      } catch (fallbackErr) {
+        setIsAnalyzing(false);
+        setCurrentStep('idle');
+        console.error('All image processors failed:', fallbackErr);
+        sendAssistantMessage('Could not read this image file. Please try another image format (PNG, JPG, WEBP).');
+      }
     }
   };
 
   // OCR Checklist confirmed
   const handleOcrConfirm = async (selected: string[]) => {
-    setOcrComments(null);
-    sendAssistantMessage(`Analyzing ${selected.length} OCR extracted comments...`);
+    const savedModal = ocrModalState;
+    setOcrModalState(null);
+    sendAssistantMessage(`Analyzing ${selected.length} extracted comments...`);
     setIsAnalyzing(true);
 
     for (const comment of selected) {
@@ -587,6 +703,11 @@ When engines differ, the reconciler assigns the label to RoBERTa if its confiden
           { source: 'ocr' },
           (step) => setCurrentStep(step)
         );
+        // Attach image context if present
+        if (savedModal?.imageUrl) {
+          item.imageUrl = savedModal.imageUrl;
+          item.visualExpression = savedModal.visualExpression;
+        }
         handleItemAnalyzed(item);
       } catch (e) {
         console.warn('OCR item analysis failed:', e);
@@ -597,7 +718,7 @@ When engines differ, the reconciler assigns the label to RoBERTa if its confiden
     setCurrentStep('idle');
     setHasOcrStep(false);
     sendAssistantMessage(
-      `Analyzed ${selected.length} screenshot comments! Dashboard is updated.`,
+      `Analyzed ${selected.length} comments from image! Dashboard is updated.`,
       ['summary', 'main complaints', 'report']
     );
   };
@@ -688,6 +809,12 @@ When engines differ, the reconciler assigns the label to RoBERTa if its confiden
       handleLoadSentences();
     } else if (chip === 'Try review examples' || chip === 'Try an example') {
       handleLoadExamples();
+    } else if (chip === 'Sample Screenshot') {
+      handleSampleScreenshot();
+    } else if (chip === 'Sample Expression 😊') {
+      handleSampleExpression('happy');
+    } else if (chip === 'Sample Expression 😠') {
+      handleSampleExpression('frustrated');
     } else if (chip === 'Preload Hugging Face') {
       sendAssistantMessage('Pre-warming 🤗 Hugging Face RoBERTa model in Web Worker...');
       sentimentService.preloadModel().then(() => {
@@ -698,14 +825,7 @@ When engines differ, the reconciler assigns the label to RoBERTa if its confiden
     } else if (chip === 'Paste reviews') {
       sendAssistantMessage('Paste your review, comment, or individual sentences in the text composer below:');
     } else if (chip === 'Upload a screenshot') {
-      const input = document.createElement('input');
-      input.type = 'file';
-      input.accept = 'image/*';
-      input.onchange = (e) => {
-        const files = (e.target as HTMLInputElement).files;
-        if (files && files[0]) handleAttachImage(files[0]);
-      };
-      input.click();
+      handleSampleScreenshot();
     } else if (chip === 'Export CSV') {
       exportReviewsToCsv(items);
     } else if (chip === 'Clear filters') {
@@ -816,6 +936,8 @@ When engines differ, the reconciler assigns the label to RoBERTa if its confiden
             onAttachImage={handleAttachImage}
             onAttachCsv={handleAttachCsv}
             onAnalyzeMultipleLines={analyzeMultipleLines}
+            onSampleScreenshot={handleSampleScreenshot}
+            onSampleExpression={handleSampleExpression}
             onExplainItem={(item) => setExplainItem(item)}
             onChipClick={handleChipClick}
             hasOcrStep={hasOcrStep}
@@ -863,11 +985,22 @@ When engines differ, the reconciler assigns the label to RoBERTa if its confiden
         />
       )}
 
-      {ocrComments && (
+      {ocrModalState && (
         <OcrChecklistModal
-          initialComments={ocrComments}
+          initialComments={ocrModalState.comments}
+          imageUrl={ocrModalState.imageUrl}
+          visualExpression={ocrModalState.visualExpression}
           onConfirm={handleOcrConfirm}
-          onCancel={() => setOcrComments(null)}
+          onAnalyzeExpressionOnly={() => {
+            if (ocrModalState.visualExpression) {
+              analyzeVisualExpressionItem(
+                ocrModalState.imageUrl,
+                ocrModalState.visualExpression
+              );
+              setOcrModalState(null);
+            }
+          }}
+          onCancel={() => setOcrModalState(null)}
         />
       )}
 

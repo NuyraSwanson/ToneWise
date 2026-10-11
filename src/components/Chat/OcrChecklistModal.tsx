@@ -1,15 +1,23 @@
 import React, { useState } from 'react';
 import { CheckSquare, Square, Trash2, Plus, FileText, CheckCircle2 } from 'lucide-react';
 
+import { VisualExpression } from '../../types';
+
 interface OcrChecklistModalProps {
   initialComments: string[];
+  imageUrl?: string;
+  visualExpression?: VisualExpression;
   onConfirm: (selectedComments: string[]) => void;
+  onAnalyzeExpressionOnly?: () => void;
   onCancel: () => void;
 }
 
 export const OcrChecklistModal: React.FC<OcrChecklistModalProps> = ({
   initialComments,
+  imageUrl,
+  visualExpression,
   onConfirm,
+  onAnalyzeExpressionOnly,
   onCancel,
 }) => {
   const [items, setItems] = useState<Array<{ id: string; text: string; selected: boolean }>>(
@@ -70,10 +78,12 @@ export const OcrChecklistModal: React.FC<OcrChecklistModalProps> = ({
             </div>
             <div>
               <h3 className="text-base font-semibold text-white font-outfit">
-                Screenshot OCR Review
+                Image Text & Expression Review
               </h3>
               <p className="text-xs text-slate-400">
-                Split into {items.length} separate comments. Edit text or deselect before running analysis.
+                {items.length > 0
+                  ? `Extracted ${items.length} text items. Edit or select items to analyse.`
+                  : 'Image analyzed. Review visual expression or add text items.'}
               </p>
             </div>
           </div>
@@ -84,6 +94,38 @@ export const OcrChecklistModal: React.FC<OcrChecklistModalProps> = ({
             Cancel
           </button>
         </div>
+
+        {/* Visual Expression Banner if present */}
+        {imageUrl && visualExpression && (
+          <div className="flex items-center gap-3.5 p-3 mx-6 mt-4 rounded-xl bg-black/40 border border-white/10">
+            <img
+              src={imageUrl}
+              alt="Uploaded thumbnail"
+              className="w-14 h-14 object-cover rounded-lg border border-white/20 shrink-0 shadow-md"
+            />
+            <div className="flex-1 text-xs">
+              <div className="flex items-center gap-1.5 font-semibold text-white">
+                <span className="text-base">{visualExpression.emoji}</span>
+                <span>Visual Expression: {visualExpression.label}</span>
+                <span className="text-[10px] font-mono text-[#2EE6A6] bg-[#2EE6A6]/10 px-1.5 py-0.5 rounded border border-[#2EE6A6]/30">
+                  {(visualExpression.confidence * 100).toFixed(0)}%
+                </span>
+              </div>
+              <p className="text-[11px] text-slate-300 mt-0.5">
+                {visualExpression.summary}
+              </p>
+            </div>
+            {onAnalyzeExpressionOnly && (
+              <button
+                type="button"
+                onClick={onAnalyzeExpressionOnly}
+                className="px-2.5 py-1.5 rounded-lg bg-gradient-to-r from-[#7C5CFF] to-[#22D3EE] hover:opacity-90 text-white text-xs font-semibold shrink-0 transition-opacity"
+              >
+                Analyse Expression
+              </button>
+            )}
+          </div>
+        )}
 
         {/* Toolbar */}
         <div className="flex items-center justify-between px-6 py-2.5 bg-black/20 border-b border-white/5 text-xs text-slate-300">

@@ -111,7 +111,46 @@ export const MessageCard: React.FC<MessageCardProps> = ({
             </div>
           )}
 
-          {/* Review Text */}
+          {/* Attached Image & Visual Expression Card */}
+          {item.imageUrl && (
+            <div className="flex items-start gap-3.5 p-3 rounded-xl bg-black/40 border border-white/10">
+              <img
+                src={item.imageUrl}
+                alt="Analyzed source"
+                className="w-16 h-16 sm:w-20 sm:h-20 object-cover rounded-xl border border-white/20 shrink-0 shadow-md"
+              />
+              <div className="space-y-1 text-xs flex-1">
+                {item.visualExpression ? (
+                  <div>
+                    <div className="flex items-center gap-1.5 font-semibold text-white flex-wrap">
+                      <span className="text-base">{item.visualExpression.emoji}</span>
+                      <span>Visual Expression: {item.visualExpression.label}</span>
+                      <span className="text-[10px] font-mono text-[#2EE6A6] bg-[#2EE6A6]/10 px-1.5 py-0.5 rounded border border-[#2EE6A6]/30">
+                        {(item.visualExpression.confidence * 100).toFixed(0)}% confidence
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-slate-300 mt-1 leading-relaxed">
+                      {item.visualExpression.summary}
+                    </p>
+                    {/* Visual expression probability strip */}
+                    <div className="flex items-center gap-2 mt-1.5 text-[10px] font-mono text-slate-400 flex-wrap">
+                      <span>Joy: {(item.visualExpression.probabilities.joy * 100).toFixed(0)}%</span>
+                      <span>·</span>
+                      <span>Neutral: {(item.visualExpression.probabilities.neutral * 100).toFixed(0)}%</span>
+                      <span>·</span>
+                      <span>Sadness: {(item.visualExpression.probabilities.sadness * 100).toFixed(0)}%</span>
+                      <span>·</span>
+                      <span>Anger: {(item.visualExpression.probabilities.anger * 100).toFixed(0)}%</span>
+                    </div>
+                  </div>
+                ) : (
+                  <span className="text-xs text-slate-400">Image Attached</span>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Review / Sentence Text */}
           <p className="text-slate-100 text-xs sm:text-sm leading-relaxed whitespace-pre-wrap font-sans">
             "{item.text}"
           </p>

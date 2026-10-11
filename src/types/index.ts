@@ -39,6 +39,23 @@ export interface SentenceAnalysis {
   needsReview: boolean;
 }
 
+export interface VisualExpression {
+  expression: 'joy' | 'sadness' | 'anger' | 'surprise' | 'neutral' | 'disgust';
+  label: string;
+  emoji: string;
+  confidence: number; // 0 to 1
+  sentiment: SentimentLabel;
+  probabilities: {
+    joy: number;
+    sadness: number;
+    anger: number;
+    surprise: number;
+    neutral: number;
+  };
+  faceDetected: boolean;
+  summary: string;
+}
+
 export interface AnalysisItem {
   id: string;
   text: string;
@@ -57,6 +74,8 @@ export interface AnalysisItem {
   explanation?: string;
   sentenceBreakdown?: SentenceAnalysis[];
   isSentence?: boolean;
+  imageUrl?: string;
+  visualExpression?: VisualExpression;
 }
 
 export type PipelineStep =
